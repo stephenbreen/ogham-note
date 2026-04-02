@@ -1,1 +1,29 @@
-.DS_Store\n.build/\n.swiftpm/\nDerivedData/
+# Swift/Xcode
+.build/
+.swiftpm/
+DerivedData/
+Package.resolved
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Temporary/Scratch files
+=
+exporting
+naming
+writing
+stress_test.md
+modern_macos_sidebar.md
+nanobanana-output/
+
+# Logs
+*.log
