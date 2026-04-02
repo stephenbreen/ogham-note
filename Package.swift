@@ -8,17 +8,22 @@ let package = Package(
         .executable(name: "OghamNote", targets: ["OghamNote"])
     ],
     dependencies: [
-        .package(url: "https://github.com/kaii-zen/libvim.swift", branch: "master"),
-        .package(url: "https://github.com/apple/swift-markdown", branch: "main") // For markdown parsing
+        .package(url: "https://github.com/apple/swift-markdown", branch: "main")
     ],
     targets: [
         .executableTarget(
             name: "OghamNote",
             dependencies: [
-                .product(name: "libvim", package: "libvim.swift"),
                 .product(name: "Markdown", package: "swift-markdown")
             ],
-            path: "Sources/OghamNote"
+            path: "Sources/OghamNote",
+            resources: [
+                .process("Resources")
+            ]
+        ),
+        .testTarget(
+            name: "OghamNoteTests",
+            dependencies: ["OghamNote"]
         )
     ]
 )

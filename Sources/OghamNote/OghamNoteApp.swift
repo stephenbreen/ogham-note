@@ -1,7 +1,10 @@
 import SwiftUI
+import AppKit
 
 @main
 struct OghamNoteApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+
     var body: some Scene {
         WindowGroup {
             MainContentView()
@@ -10,6 +13,19 @@ struct OghamNoteApp: App {
         }
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unifiedCompact)
+    }
+}
+
+class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+        
+        // Set the dock icon programmatically
+        if let path = Bundle.module.path(forResource: "app_icon", ofType: "png"),
+           let iconImage = NSImage(contentsOfFile: path) {
+            NSApp.applicationIconImage = iconImage
+        }
     }
 }
 
