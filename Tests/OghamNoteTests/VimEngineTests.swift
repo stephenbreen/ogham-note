@@ -6,9 +6,9 @@ final class VimEngineTests: XCTestCase {
     
     var engine: VimEngine!
     
-    override func setUp() {
-        super.setUp()
-        engine = VimEngine()
+    override func setUp() async throws {
+        try await super.setUp()
+        engine = await VimEngine()
     }
     
     override func tearDown() {

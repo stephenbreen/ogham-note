@@ -8,15 +8,15 @@ final class PerformanceBenchmarks: XCTestCase {
     var engine: VimEngine!
     var largeContent: String = ""
     
-    override func setUp() {
-        super.setUp()
-        engine = VimEngine()
+    override func setUp() async throws {
+        try await super.setUp()
+        engine = await VimEngine()
         
         // Load the generated stress test file
         let url = URL(fileURLWithPath: "stress_test.md")
         if let content = try? String(contentsOf: url) {
             largeContent = content
-            engine.setBuffer(content)
+            await engine.setBuffer(content)
         }
     }
     

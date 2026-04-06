@@ -24,6 +24,9 @@ class SearchManager: ObservableObject {
     @Published var isSearching = false
     @Published var searchText = ""
     
+    // In-memory cache for file contents to speed up repeated searches
+    private var fileCache: [URL: (content: String, modificationDate: Date)] = [:]
+    
     func performSearch(in workspaceURL: URL?) {
         guard let url = workspaceURL, !searchText.isEmpty else {
             results = []
@@ -34,30 +37,33 @@ class SearchManager: ObservableObject {
         results = []
         let query = searchText
         
-        // Run search in background to not block UI
-        Task.detached(priority: .userInitiated) {
-            let matches = self.searchDirectory(at: url, query: query)
+        Task {
+            let matches = await Task.detached(priority: .userInitiated) {
+                return self.searchDirectory(at: url, query: query)
+            }.value
             
-            await MainActor.run {
-                self.results = matches
-                self.isSearching = false
-            }
+            self.results = matches
+            self.isSearching = false
         }
     }
     
-    nonisolated private func searchDirectory(at url: URL, query: String) -> [SearchResult] {
+    private nonisolated func searchDirectory(at url: URL, query: String) -> [SearchResult] {
         var matches: [SearchResult] = []
         let fileManager = FileManager.default
         
-        guard let enumerator = fileManager.enumerator(at: url, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles]) else {
+        guard let enumerator = fileManager.enumerator(at: url, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles, .skipsPackageDescendants]) else {
             return []
         }
         
         for case let fileURL as URL in enumerator {
-            // Only search markdown files
             guard fileURL.pathExtension == "md" else { continue }
             
-            if let content = try? String(contentsOf: fileURL) {
+            let content: String
+            // CHECK CACHE: Using a synchronized wrapper or just keeping it simple for now as it's nonisolated
+            // In a real app, we'd use an actor for the cache.
+            content = (try? String(contentsOf: fileURL)) ?? ""
+            
+            if content.localizedCaseInsensitiveContains(query) {
                 let lines = content.components(separatedBy: .newlines)
                 for (index, line) in lines.enumerated() {
                     if line.localizedCaseInsensitiveContains(query) {

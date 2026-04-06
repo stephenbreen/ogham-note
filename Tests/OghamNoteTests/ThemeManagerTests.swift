@@ -6,9 +6,10 @@ final class ThemeManagerTests: XCTestCase {
     
     var themeManager: ThemeManager!
     
-    override func setUp() {
-        super.setUp()
-        themeManager = ThemeManager()
+    override func setUp() async throws {
+        try await super.setUp()
+        themeManager = await ThemeManager()
+        themeManager.setTheme(.nord)
     }
     
     override func tearDown() {

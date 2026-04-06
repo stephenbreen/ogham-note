@@ -6,9 +6,9 @@ final class SettingsManagerTests: XCTestCase {
     
     var settings: SettingsManager!
     
-    override func setUp() {
-        super.setUp()
-        settings = SettingsManager()
+    override func setUp() async throws {
+        try await super.setUp()
+        settings = await SettingsManager()
     }
     
     override func tearDown() {

@@ -282,7 +282,14 @@ class VimEngine: ObservableObject {
         chars.insert("\n", at: insertIndex)
         internalBuffer = String(chars)
         cursorIndex = insertIndex
-        recalculateLineOffsets()
+        
+        // Incremental Update: Add a new offset and shift subsequent ones
+        let newLineIndex = below ? lineIndex + 1 : lineIndex
+        lineOffsets.insert(insertIndex + 1, at: newLineIndex + 1)
+        for i in (newLineIndex + 2)..<lineOffsets.count {
+            lineOffsets[i] += 1
+        }
+        
         onTextChange?(internalBuffer)
         onSelectionChange?(NSRange(location: cursorIndex, length: 0))
     }
@@ -327,10 +334,26 @@ class VimEngine: ObservableObject {
     
     private func deleteCurrentChar() {
         guard cursorIndex < internalBuffer.count else { return }
+        let charToDelete = internalBuffer[internalBuffer.index(internalBuffer.startIndex, offsetBy: cursorIndex)]
+        
         var chars = Array(internalBuffer)
         chars.remove(at: cursorIndex)
         internalBuffer = String(chars)
-        recalculateLineOffsets()
+        
+        if charToDelete == "\n" {
+            // If we deleted a newline, remove that offset
+            let (lineIndex, _) = getLineAndColumn(for: cursorIndex)
+            if lineIndex + 1 < lineOffsets.count {
+                lineOffsets.remove(at: lineIndex + 1)
+            }
+        }
+        
+        // Shift subsequent offsets
+        let (affectedLine, _) = getLineAndColumn(for: cursorIndex)
+        for i in (affectedLine + 1)..<lineOffsets.count {
+            lineOffsets[i] -= 1
+        }
+        
         onTextChange?(internalBuffer)
     }
     

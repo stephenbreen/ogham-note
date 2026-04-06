@@ -6,9 +6,9 @@ final class SearchManagerTests: XCTestCase {
     
     var searchManager: SearchManager!
     
-    override func setUp() {
-        super.setUp()
-        searchManager = SearchManager()
+    override func setUp() async throws {
+        try await super.setUp()
+        searchManager = await SearchManager()
     }
     
     override func tearDown() {

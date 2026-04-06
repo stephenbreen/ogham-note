@@ -125,13 +125,22 @@ class EditorTextView: NSTextView {
     var baseFont: NSFont = .monospacedSystemFont(ofSize: 14, weight: .regular)
 
     func highlightSyntax(with theme: AppTheme) {
-        guard let storage = textStorage else { return }
+        guard let storage = textStorage, let layoutManager = layoutManager, let textContainer = textContainer else { return }
+        
+        let visibleRect = visibleRect
+        let visibleRange = layoutManager.glyphRange(forBoundingRect: visibleRect, in: textContainer)
+        let characterRange = layoutManager.characterRange(forGlyphRange: visibleRange, actualGlyphRange: nil)
+        
+        if characterRange.length == 0 { return }
+        
         let text = storage.string
-        let fullRange = NSRange(location: 0, length: text.count)
-        if fullRange.length == 0 { return }
+        // Expand range to include full lines
+        let nsText = text as NSString
+        let fullLineRange = nsText.lineRange(for: characterRange)
         
         storage.beginEditing()
-        storage.setAttributes([.foregroundColor: NSColor(theme.foreground), .font: baseFont], range: fullRange)
+        // Reset attributes for the range we are about to re-highlight
+        storage.setAttributes([.foregroundColor: NSColor(theme.foreground), .font: baseFont], range: fullLineRange)
         
         let patterns: [(String, NSColor)] = [
             ("^# .*", NSColor(theme.h1)),
@@ -144,7 +153,7 @@ class EditorTextView: NSTextView {
         
         for (pattern, color) in patterns {
             if let regex = try? NSRegularExpression(pattern: pattern, options: [.anchorsMatchLines]) {
-                regex.enumerateMatches(in: text, options: [], range: fullRange) { match, _, _ in
+                regex.enumerateMatches(in: text, options: [], range: fullLineRange) { match, _, _ in
                     if let range = match?.range {
                         storage.addAttribute(.foregroundColor, value: color, range: range)
                         if pattern.contains("#") {
