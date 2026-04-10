@@ -5,6 +5,7 @@ import SwiftUI
 @MainActor
 class WorkspaceManager: ObservableObject {
     @Published var rootItems: [FileItem] = []
+    @Published var allFileItems: [FileItem] = [] // Flattened list for quick open
     @Published var selectedFileURL: URL?
     @Published var currentWorkspaceURL: URL?
     @Published var recentNotes: [FileItem] = []
@@ -41,7 +42,21 @@ class WorkspaceManager: ObservableObject {
         }.value
         
         self.rootItems = items
+        self.allFileItems = flatten(items)
         isScanning = false
+    }
+
+    private func flatten(_ items: [FileItem]) -> [FileItem] {
+        var flat: [FileItem] = []
+        for item in items {
+            if !item.isDirectory {
+                flat.append(item)
+            }
+            if let children = item.children {
+                flat.append(contentsOf: flatten(children))
+            }
+        }
+        return flat
     }
 
     private func loadGitIgnore(from workspaceURL: URL) {

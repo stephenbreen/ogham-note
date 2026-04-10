@@ -10,47 +10,63 @@ struct MainContentView: View {
     @State private var isSidebarVisible = true
     @State private var isPreviewVisible = false
     @State private var isDistractionFree = false
+    @State private var isQuickOpenVisible = false
     @State private var content: String = "# Welcome to Ogham Note\n\nStart editing your markdown files with Vim keybindings."
 
     var body: some View {
-        NavigationSplitView {
-            if isSidebarVisible && !isDistractionFree {
-                SidebarView(
-                    workspaceManager: workspaceManager,
-                    searchManager: searchManager,
-                    theme: themeManager.currentTheme
-                )
-                .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 400)
-            }
-        } detail: {
-            VStack(spacing: 0) {
-                HSplitView {
-                    EditorContainerView(
-                        content: $content, 
-                        vimEngine: vimEngine, 
-                        theme: themeManager.currentTheme,
-                        settings: settingsManager
+        ZStack {
+            NavigationSplitView {
+                if isSidebarVisible && !isDistractionFree {
+                    SidebarView(
+                        workspaceManager: workspaceManager,
+                        searchManager: searchManager,
+                        theme: themeManager.currentTheme
                     )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    // Ensure the editor itself is not animated by global state changes
-                    .animation(nil, value: content)
+                    .navigationSplitViewColumnWidth(min: 220, ideal: 260, max: 400)
+                }
+            } detail: {
+                VStack(spacing: 0) {
+                    HSplitView {
+                        EditorContainerView(
+                            content: $content, 
+                            vimEngine: vimEngine, 
+                            theme: themeManager.currentTheme,
+                            settings: settingsManager
+                        )
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        // Ensure the editor itself is not animated by global state changes
+                        .animation(nil, value: content)
 
-                    if isPreviewVisible {
-                        MarkdownPreviewView(content: content, theme: themeManager.currentTheme)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .background(themeManager.currentTheme.background.opacity(0.8))
-                            .transition(.asymmetric(insertion: .move(edge: .trailing), removal: .opacity))
+                        if isPreviewVisible {
+                            MarkdownPreviewView(content: content, theme: themeManager.currentTheme)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .background(themeManager.currentTheme.background.opacity(0.8))
+                                .transition(.asymmetric(insertion: .move(edge: .trailing), removal: .opacity))
+                        }
+                    }
+
+                    if !isDistractionFree {
+                        CommandBarView(vimEngine: vimEngine, theme: themeManager.currentTheme)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
                 }
-
-                if !isDistractionFree {
-                    StatusBarView(vimEngine: vimEngine, theme: themeManager.currentTheme)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
+                // Scope animations to only the layout toggles
+                .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isPreviewVisible)
+                .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isDistractionFree)
             }
-            // Scope animations to only the layout toggles
-            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isPreviewVisible)
-            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isDistractionFree)
+            
+            if isQuickOpenVisible {
+                Color.black.opacity(0.3)
+                    .edgesIgnoringSafeArea(.all)
+                    .onTapGesture { isQuickOpenVisible = false }
+                
+                QuickOpenView(
+                    workspaceManager: workspaceManager,
+                    theme: themeManager.currentTheme,
+                    isVisible: $isQuickOpenVisible
+                )
+                .transition(.scale(scale: 0.95).combined(with: .opacity))
+            }
         }
         .onChange(of: workspaceManager.selectedFileURL) { oldVal, newVal in
             if let url = newVal {
@@ -114,6 +130,13 @@ struct MainContentView: View {
                 }
                 .help("Toggle Preview")
             }
+        }
+        .background {
+            Button("") {
+                isQuickOpenVisible.toggle()
+            }
+            .keyboardShortcut("p", modifiers: [.command])
+            .opacity(0)
         }
     }
 }
@@ -229,46 +252,5 @@ struct WorkspaceRow: View {
     var body: some View {
         Label(name, systemImage: icon)
             .foregroundColor(.primary)
-    }
-}
-
-struct StatusBarView: View {
-    @ObservedObject var vimEngine: VimEngine
-    let theme: AppTheme
-
-    var body: some View {
-        HStack {
-            Text(vimEngine.mode.rawValue)
-                .font(.caption)
-                .fontWeight(.black)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 2)
-                .background(modeColor)
-                .foregroundColor(.white)
-                .cornerRadius(4)
-                .animation(.spring(), value: vimEngine.mode)
-
-            if !vimEngine.commandText.isEmpty {
-                Text(vimEngine.commandText)
-                    .font(.caption)
-                    .padding(.leading, 8)
-                    .foregroundColor(theme.foreground)
-                    .transition(.move(edge: .leading).combined(with: .opacity))
-            }
-
-            Spacer()
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(VisualEffectView(material: .contentBackground, blendingMode: .withinWindow))
-    }
-
-    var modeColor: Color {
-        switch vimEngine.mode {
-        case .normal: return theme.normalMode
-        case .insert: return theme.insertMode
-        case .visual, .visualLine: return theme.visualMode
-        case .command: return theme.commandMode
-        }
     }
 }

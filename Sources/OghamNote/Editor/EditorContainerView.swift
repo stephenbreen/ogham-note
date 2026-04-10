@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import Markdown
 
 struct EditorContainerView: NSViewRepresentable {
     @Binding var content: String
@@ -50,6 +51,14 @@ struct EditorContainerView: NSViewRepresentable {
 
         vimEngine.onUndo = {
             textView.undoManager?.undo()
+        }
+
+        vimEngine.onInsertModeStarted = {
+            textView.undoManager?.beginUndoGrouping()
+        }
+
+        vimEngine.onInsertModeEnded = {
+            textView.undoManager?.endUndoGrouping()
         }
 
         scrollView.documentView = textView
@@ -133,37 +142,54 @@ class EditorTextView: NSTextView {
         
         if characterRange.length == 0 { return }
         
-        let text = storage.string
-        // Expand range to include full lines
-        let nsText = text as NSString
-        let fullLineRange = nsText.lineRange(for: characterRange)
+        // Use the FULL text for now to simplify range mapping, but we could optimize to only parse the visible block.
+        // Even with 10k lines, parsing the full document once is usually <50ms.
+        var highlighter = MarkdownHighlighter(storage: storage, theme: theme, baseFont: baseFont)
         
         storage.beginEditing()
-        // Reset attributes for the range we are about to re-highlight
-        storage.setAttributes([.foregroundColor: NSColor(theme.foreground), .font: baseFont], range: fullLineRange)
+        // Reset ALL attributes to base first (O(N) unfortunately, but needed for consistency)
+        // Optimization: Reset only the visible range?
+        storage.setAttributes([.foregroundColor: NSColor(theme.foreground), .font: baseFont], range: NSRange(location: 0, length: storage.string.count))
         
-        let patterns: [(String, NSColor)] = [
-            ("^# .*", NSColor(theme.h1)),
-            ("^## .*", NSColor(theme.h2)),
-            ("^### .*", NSColor(theme.h3)),
-            ("\\*\\*.*?\\*\\*", NSColor(theme.accent)), // Bold
-            ("\\*.*?\\*", NSColor(theme.accent).withAlphaComponent(0.8)), // Italic
-            ("`.*?`", NSColor(theme.foreground).withAlphaComponent(0.7)) // Inline code
-        ]
+        // Perform AST-based highlighting
+        let document = Document(parsing: storage.string)
+        highlighter.visit(document)
         
-        for (pattern, color) in patterns {
-            if let regex = try? NSRegularExpression(pattern: pattern, options: [.anchorsMatchLines]) {
-                regex.enumerateMatches(in: text, options: [], range: fullLineRange) { match, _, _ in
-                    if let range = match?.range {
-                        storage.addAttribute(.foregroundColor, value: color, range: range)
-                        if pattern.contains("#") {
-                            storage.addAttribute(.font, value: NSFont.boldSystemFont(ofSize: baseFont.pointSize + 2), range: range)
-                        }
-                    }
-                }
-            }
-        }
         storage.endEditing()
+    }
+
+    override func drawInsertionPoint(in rect: NSRect, color: NSColor, turnedOn flag: Bool) {
+        guard let engine = vimEngine, flag else {
+            super.drawInsertionPoint(in: rect, color: color, turnedOn: flag)
+            return
+        }
+        
+        switch engine.mode {
+        case .normal, .visual, .visualLine:
+            // Draw a block cursor
+            let selectedRange = self.selectedRange()
+            let range = NSRange(location: selectedRange.location, length: 1)
+            let safeRange = NSRange(location: selectedRange.location, length: min(1, self.string.count - selectedRange.location))
+            
+            var blockRect = rect
+            if safeRange.length > 0 {
+                blockRect = self.firstRect(forCharacterRange: safeRange, actualRange: nil)
+                blockRect = self.convert(blockRect, from: nil)
+            } else {
+                // At end of buffer, draw a standard-width block
+                blockRect.size.width = 8
+            }
+            
+            color.withAlphaComponent(0.6).set()
+            blockRect.fill()
+            
+        case .insert:
+            super.drawInsertionPoint(in: rect, color: color, turnedOn: flag)
+            
+        case .command, .search:
+            // Hide editor cursor as focus is in command bar
+            break
+        }
     }
 
     override func keyDown(with event: NSEvent) {
@@ -232,14 +258,14 @@ class LineNumberRulerView: NSRulerView {
             let isCursorLine = currentLineNumber + lineCount == cursorLineNumber
             
             if settings.isRelativeLineNumbersEnabled {
-                displayNum = isCursorLine ? cursorLineNumber : abs((currentLineNumber + lineCount) - cursorLineNumber)
+                displayNum = isCursorLine ? (currentLineNumber + lineCount) : abs((currentLineNumber + lineCount) - cursorLineNumber)
             } else {
                 displayNum = currentLineNumber + lineCount
             }
             
             let label = "\(displayNum)" as NSString
             let attributes: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: 10),
+                .font: NSFont.monospacedDigitSystemFont(ofSize: 10, weight: isCursorLine ? .bold : .regular),
                 .foregroundColor: isCursorLine ? NSColor(theme.accent) : NSColor.secondaryLabelColor
             ]
             
